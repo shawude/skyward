@@ -124,6 +124,7 @@ jobs:
       - name: Take the recovery partition out of the stock package
         if: steps.cache.outputs.cache-hit != 'true'
         run: |
+          mkdir -p stock
           if [ -f "devices/${{ matrix.device }}/recovery.img.zip" ]; then
             unzip -p "devices/${{ matrix.device }}/recovery.img.zip" recovery.img > stock/recovery.img
           else
