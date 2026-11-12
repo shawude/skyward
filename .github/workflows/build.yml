@@ -82,7 +82,14 @@ jobs:
             test -f "devices/$DEVICE.toml"
             echo "devices=$(jq -nc --arg device "$DEVICE" '[$device]')" >> "$GITHUB_OUTPUT"
           else
-            echo "devices=$(basename -s .toml devices/*.toml | jq -R . | jq -sc .)" >> "$GITHUB_OUTPUT"
+            # A configuration with no stock build is a port still in
+            # progress: there is no recovery partition to build on yet, so
+            # it waits until its [stock] is filled in.
+            devices=$(for config in devices/*.toml; do
+              grep -q '^\[stock\]' "$config" || continue
+              basename -s .toml "$config"
+            done | jq -R . | jq -sc .)
+            echo "devices=$devices" >> "$GITHUB_OUTPUT"
           fi
 
   recovery:
@@ -111,10 +118,17 @@ jobs:
           path: stock/recovery.img
           key: stock-recovery-${{ steps.stock.outputs.recovery }}
       # Only what the recovery partition takes is read of the package,
-      # which is several gigabytes in all.
+      # which is several gigabytes in all. A device whose package address
+      # expires, as one that names its files by hash does, keeps the taken
+      # partition in its own folder instead.
       - name: Take the recovery partition out of the stock package
         if: steps.cache.outputs.cache-hit != 'true'
-        run: tools/skyward-pack stock --config "devices/${{ matrix.device }}.toml" --out stock/recovery.img
+        run: |
+          if [ -f "devices/${{ matrix.device }}/recovery.img.zip" ]; then
+            unzip -p "devices/${{ matrix.device }}/recovery.img.zip" recovery.img > stock/recovery.img
+          else
+            tools/skyward-pack stock --config "devices/${{ matrix.device }}.toml" --out stock/recovery.img
+          fi
       - name: Check the stock recovery
         env:
           RECOVERY: ${{ steps.stock.outputs.recovery }}

@@ -1,0 +1,148 @@
+# OnePlus 13 (dodge), built from ColorOS 17's full update package.
+#
+# Every value here was read out of the package's own partitions:
+# my_product/build.prop for the screen and the build name, dtbo for the
+# touch panel and the WLAN chip, vendor and vendor_dlkm for the programs and
+# the kernel modules.
+
+[device]
+codename = "dodge"
+brand = "OnePlus"
+model = "OnePlus 13"
+ab = true
+soc = { hans = "骁龙®8至尊版移动平台", hant = "驍龍®8至尊版行動平台", en = "Snapdragon® 8 Elite Mobile Platform" }
+# ColorOS keeps its build name here, PJZ110_17.0.0.103(CN01).
+os_version_prop = "ro.build.version.oplusrom"
+
+[display]
+width = 1440
+height = 3168
+# ro.sf.lcd_density of my_product, which is the stock setting.
+density = 640
+diagonal = 6.82
+# TODO(dodge): the radius the stock launcher rounds a page's corners to;
+# 100 is a guess in the range the panel's corners take.
+corner_radius = 100
+
+[modules]
+sources = ["vendor_boot", "vendor_dlkm", "vendor", "system_dlkm"]
+# The touch panel is a Synaptics S3910 behind OnePlus' hbp layer; its node
+# in dtbo is synaptics_tcm_hbp@0. Dependencies come from modules.dep.
+load = ["oplus_bsp_tp_hbp_syna_s3910"]
+
+# TODO(dodge): whether the touch driver has to be told anything before a
+# recovery reads touches from it. OnePlus' hbp layer hands touches through
+# hbtp_daemon, which a recovery may do without; check the first boot before
+# adding a [touch] section, since a write that fails stops the input from
+# being set up at all.
+
+# The firmware the drivers ask for is on the modem partition.
+[firmware]
+partition = "modem"
+
+[partitions]
+mounted = ["persist"]
+
+# The secure world's listeners, as vendor's own init scripts start them: the
+# programs reach into the secure world through them.
+
+[[service]]
+path = "/vendor/bin/qseecomd"
+libraries = ["/system/lib64", "/vendor/lib64"]
+ready_property = "vendor.sys.listeners.registered"
+user = "root"
+groups = ["root", "drmrpc"]
+
+[[service]]
+path = "/vendor/bin/hlosminkdaemon"
+libraries = ["/system/lib64", "/vendor/lib64"]
+user = "system"
+groups = ["system", "wakelock"]
+capabilities = ["WAKE_ALARM", "BLOCK_SUSPEND"]
+
+# The key service and the credential service, which open the data partition
+# with the screen lock.
+[[service]]
+path = "/vendor/bin/hw/android.hardware.security.keymint-service-qti"
+libraries = ["/system/lib64", "/vendor/lib64"]
+ready_service = "android.hardware.security.keymint.IKeyMintDevice/default"
+registers = [
+    "android.hardware.security.keymint.IRemotelyProvisionedComponent/default",
+    "android.hardware.security.secureclock.ISecureClock/default",
+    "android.hardware.security.sharedsecret.ISharedSecret/default",
+]
+user = "system"
+groups = ["system", "drmrpc"]
+
+[[service]]
+path = "/vendor/bin/hw/android.hardware.gatekeeper-service-qti"
+libraries = ["/system/lib64", "/vendor/lib64"]
+ready_service = "android.hardware.gatekeeper.IGatekeeper/default"
+user = "system"
+groups = ["system"]
+
+# The boot control, which says which slot the bootloader starts next.
+[[service]]
+path = "/vendor/bin/hw/android.hardware.boot-service.qti"
+libraries = ["/system/lib64", "/vendor/lib64"]
+ready_service = "android.hardware.boot.IBootControl/default"
+user = "root"
+groups = ["root"]
+
+# The weaver, in NXP's secure element, which binds each user's secret to a
+# slot with a screen lock or without; and the secure element itself, which
+# the weaver's slots live in. Both are in the odm partition, which the
+# recovery mounts where its own table says.
+[[service]]
+path = "/odm/bin/hw/android.hardware.weaver-service.nxp"
+libraries = ["/system/lib64", "/vendor/lib64", "/odm/lib64"]
+ready_service = "android.hardware.weaver.IWeaver/default"
+user = "vendor_nxp_weaver"
+groups = ["system", "drmrpc"]
+capabilities = ["WAKE_ALARM"]
+
+[[service]]
+path = "/odm/bin/hw/android.hardware.secure_element-service.qti"
+libraries = ["/system/lib64", "/vendor/lib64", "/odm/lib64"]
+ready_service = "android.hardware.secure_element.ISecureElement/eSE1"
+user = "system"
+groups = ["nfc", "system"]
+
+# The boot control, which says which slot the bootloader starts next.
+[haptics]
+resonance = "/sys/class/qcom-haptics/lra_frequency_hz"
+strength = { lightest = 0.25, strongest = 0.75 }
+
+# WLAN: Qualcomm's Peach on PCIe, the node dtbo calls cnss-peach. The driver
+# is qca_cld3_peach_v2, one of vendor_dlkm's. rfkill is a kernel module the
+# system loads first and a recovery leaves out.
+[wlan]
+modules = ["rfkill", "qca_cld3_peach_v2"]
+writes = [{ path = "/sys/kernel/cnss/fs_ready", value = "1" }]
+interface = "wlan0"
+supplicant = "/vendor/bin/hw/wpa_supplicant"
+libraries = ["/system/lib64", "/vendor/lib64"]
+service = "android.hardware.wifi.supplicant.ISupplicant/default"
+# TODO(dodge): the page ColorOS asks to tell whether a network reaches the
+# internet; 17 Ultra's is Xiaomi's, this one is a placeholder.
+probe = "http://connect.oplus.com/generate_204"
+
+[backup]
+# Qualcomm's baseband and sensor calibration partitions.
+efs = ["modemst1", "modemst2", "fsg", "fsc", "persist"]
+
+[wipe]
+# TODO(dodge): where ColorOS keeps logs and dumps under /data, such as
+# /data/oplus/log and /data/vendor/ramdump.
+
+# TODO(dodge): ColorOS' update server, which is not Xiaomi's.
+# [update]
+# server = ""
+
+# The full update package the stock recovery was taken out of, and that
+# partition's SHA-256. The package URL carries a signature that expires, so
+# it has to be refreshed for every build.
+[stock]
+version = "PJZ110_17.0.0.103(CN01)"
+package = "https://gauss-compota-c-cn.allawnfs.com/remove-de64e41ce6996aaaec860881d856e7a6/g-3a4b355c5511dab1721fa7b4f8023354/component-ota/26/10/08/81d9e0f170de4d83be9f69ae5bf6d061.zip?sign=3c5604eed11d2477bce2170b3f467311&t=6af601a1&AWSAccessKeyId=ayjy7KyLVHvDqDax6_KqJgtBeORTJARg9MSGiL66&Expires=1794508969&Signature=dNUHUODDuVxCiKQhuTIKAoFUyk8%3D"
+recovery = "406ef6641961d713951f748f4b9a415d321589b8f65d788995226375586bd016"

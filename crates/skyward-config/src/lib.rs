@@ -572,9 +572,12 @@ impl DeviceConfig {
             }
         }
         if let Some(stock) = &cfg.stock {
-            let name = stock.package.rsplit('/').next().unwrap_or_default();
+            // A package's address may carry query parameters, and a maker
+            // that names its files by hash does not put the build in it.
+            let path = stock.package.split('?').next().unwrap_or_default();
+            let name = path.rsplit('/').next().unwrap_or_default();
             ensure!(
-                stock.package.starts_with("https://") && name.ends_with(".zip") && name.contains(&stock.version) && !stock.version.is_empty(),
+                stock.package.starts_with("https://") && name.ends_with(".zip") && !stock.version.is_empty(),
                 "[stock] package: {} is not an HTTPS address of the full package of {}",
                 stock.package,
                 stock.version
@@ -866,8 +869,14 @@ mod tests {
         assert!(DeviceConfig::parse(&format!("{ok}recovery = \"{}\"\n", &hash[1..])).is_err(), "too short");
         let plain = ok.replace("https://", "http://");
         assert!(DeviceConfig::parse(&format!("{plain}recovery = \"{hash}\"\n")).is_err(), "over plain HTTP");
-        let other = ok.replace("version = \"OS1.0.1.0", "version = \"OS1.0.2.0");
-        assert!(DeviceConfig::parse(&format!("{other}recovery = \"{hash}\"\n")).is_err(), "the package of another build");
+        let not_zip = ok.replace(".zip", ".bin");
+        assert!(DeviceConfig::parse(&format!("{not_zip}recovery = \"{hash}\"\n")).is_err(), "not an update package");
+        // A maker that names its files by hash, with query parameters, does
+        // not put the build's name in the address.
+        let hashed = format!(
+            "[device]\ncodename = \"x\"\n[stock]\nversion = \"PJZ110_17.0.0.103(CN01)\"\npackage = \"https://d.example/component-ota/26/10/08/81d9e0f170de4d83be9f69ae5bf6d061.zip?sign=abc&t=1\"\nrecovery = \"{hash}\"\n"
+        );
+        assert!(DeviceConfig::parse(&hashed).is_ok(), "a package named by hash");
         assert_eq!(DeviceConfig::parse("[device]\ncodename = \"x\"\n").unwrap().stock, None);
     }
 
